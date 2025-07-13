@@ -29,15 +29,52 @@ func calculateAvarage(scores []float64) float64 {
 	return sum / float64(len(scores))
 }
 
-func main() {
-	var name string
-	var fname string
-	var lname string
+type Subject struct {
+	Name  string
+	Score float64
+}
 
+func inputSubAndScore(numSubjects int) ([]string, []float64) {
 	var scores []float64
 	var subjects []string
+	for i := 0; i < numSubjects; i++ {
+		var subject Subject
+		fmt.Printf("Enter the Subject #%d name and score (e.g. Math 85): ", i+1)
+		_, err := fmt.Scanf("%s %f", &subject.Name, &subject.Score)
+
+		if err != nil || subject.Score < 0 || subject.Score > 100 {
+			fmt.Println("Invalid input. Please enter a valid score between 0 and 100.")
+			i-- // Decrement i to repeat this iteration
+			continue
+		}
+		// check if the subject already exists
+		exists := false
+		for _, s := range subjects {
+			if subject.Name == s {
+				exists = true
+				break
+			}
+		}
+		if exists {
+			fmt.Println("Subject already exists. Please enter a different subject name.")
+			i-- // Decrement i to repeat this iteration
+			continue
+		}
+		
+		scores = append(scores, subject.Score)
+		subjects = append(subjects, subject.Name)
+		fmt.Printf("Subject: %s, Score: %.2f\n", subject.Name, subject.Score)
+	}
+
+	return subjects, scores
+}
+
+// function for inputing student name and number of subjects
+func inputStudentName() string {
+	var fname string
+	var lname string
 	for {
-		fmt.Print("Enter student name(e.g. John Doe): ")
+		fmt.Print("Enter student name (e.g. John Doe): ")
 		_, err := fmt.Scanf("%s %s", &fname, &lname)
 		if err != nil {
 			fmt.Println("Invalid input. Please enter a valid name.")
@@ -45,8 +82,11 @@ func main() {
 		}
 		break
 	}
+	return fname + " " + lname
+}
 
-	name = fname + " " + lname
+// function for inputing number of subjects
+func inputNumSubjects() int {
 	var numSubjects int
 	for {
 		fmt.Print("Enter number of subjects: ")
@@ -57,22 +97,21 @@ func main() {
 		}
 		break
 	}
+	return numSubjects
+}
 
-	for i := 0; i < numSubjects; i++ {
-		var score float64
-		var subject string
-		fmt.Printf("Enter the Subject #%d name and score (e.g. Math 85): ", i+1)
-		_, err := fmt.Scanf("%s %f", &subject, &score)
+func main() {
+	var scores []float64
+	var subjects []string
 
-		if err != nil || score < 0 || score > 100 {
-			fmt.Println("Invalid input. Please enter a valid score between 0 and 100.")
-			i-- // Decrement i to repeat this iteration
-			continue
-		}
-		scores = append(scores, score)
-		subjects = append(subjects, subject)
-		fmt.Printf("Subject: %s, Score: %.2f\n", subject, score)
-	}
+	var name string
+	var numSubjects int
+
+	fmt.Println("Welcome to the Student Grade Calculator!")
+	name = inputStudentName()
+	numSubjects = inputNumSubjects()
+
+	subjects, scores = inputSubAndScore(numSubjects)
 
 	average := calculateAvarage(scores)
 	// calculate the individual grades'
