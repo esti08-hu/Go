@@ -77,7 +77,7 @@ func (ls *libraryService) BorrowBook(bookID int, memberID int) error {
 	}
 	
 	if bookIdx == -1 {
-		return fmt.Errorf("book with id %d not found", bookIdx)
+		return fmt.Errorf("book with id %d not found", bookID)
 	}
 
 	if ls.books[bookIdx].Status == "Borrowed" {
