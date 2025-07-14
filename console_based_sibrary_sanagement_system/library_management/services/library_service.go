@@ -7,23 +7,24 @@ import (
 
 type LibraryService interface {
 	AddBook(book models.Book)
-    RemoveBook(bookID int)
-    BorrowBook(bookID int, memberID int) error
-    ReturnBook(bookID int, memberID int) error
-    ListAvailableBooks() []models.Book
-    ListBorrowedBooks(memberID int) []models.Book
+	RemoveBook(bookID int)
+	BorrowBook(bookID int, memberID int) error
+	ReturnBook(bookID int, memberID int) error
+	ListAvailableBooks() []models.Book
+	ListBorrowedBooks(memberID int) []models.Book
+	AddMember(member models.Member)
 }
 
 type libraryService struct {
-    books       []models.Book
-    members     []models.Member
+	books         []models.Book
+	members       []models.Member
 	borrowedBooks map[int][]int // Maps memberID to a list of borrowed book IDs
 }
 
 func NewLibraryService() LibraryService {
 	return &libraryService{
-		books:       []models.Book{},
-		members:     []models.Member{},
+		books:         []models.Book{},
+		members:       []models.Member{},
 		borrowedBooks: make(map[int][]int),
 	}
 }
@@ -66,16 +67,15 @@ func (ls *libraryService) RemoveBook(bookID int) {
 	}
 }
 
-
 func (ls *libraryService) BorrowBook(bookID int, memberID int) error {
 	bookIdx := -1
 	for i, book := range ls.books {
-	if bookID == book.ID {
-		bookIdx = i
-		break
+		if bookID == book.ID {
+			bookIdx = i
+			break
+		}
 	}
-	}
-	
+
 	if bookIdx == -1 {
 		return fmt.Errorf("book with id %d not found", bookID)
 	}
@@ -87,14 +87,14 @@ func (ls *libraryService) BorrowBook(bookID int, memberID int) error {
 	memberIdx := -1
 	for i, member := range ls.members {
 		if member.ID == memberID {
-		memberIdx = i
-		break
+			memberIdx = i
+			break
 		}
 	}
 	if memberIdx == -1 {
 		return fmt.Errorf("member with id %d not found", memberID)
 	}
-	ls.books[bookIdx].Status = "Borrowed" 
+	ls.books[bookIdx].Status = "Borrowed"
 	ls.members[memberIdx].BorrowedBooks = append(ls.members[memberIdx].BorrowedBooks, ls.books[bookIdx])
 	ls.borrowedBooks[memberID] = append(ls.borrowedBooks[memberID], bookID)
 	return nil
@@ -105,7 +105,7 @@ func (ls *libraryService) ReturnBook(bookID int, memberID int) error {
 	if !ok {
 		return fmt.Errorf("member with id %d has not borrowed any books", memberID)
 	}
-	
+
 	for i, id := range borrowed {
 		if id == bookID {
 			ls.borrowedBooks[memberID] = append(borrowed[:i], borrowed[i+1:]...)
@@ -145,3 +145,14 @@ func (ls *libraryService) ListBorrowedBooks(memberID int) []models.Book {
 	return borrowedBooks
 }
 
+func (ls *libraryService) AddMember(member models.Member) {
+	// Check if the member already exists
+	for _, m := range ls.members {
+		if m.ID == member.ID {
+			fmt.Printf("Member with ID %d already exists.\n", member.ID)
+			return
+		}
+	}
+	ls.members = append(ls.members, member)
+	fmt.Println("Member added successfully.")
+}

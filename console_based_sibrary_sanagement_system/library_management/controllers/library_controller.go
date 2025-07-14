@@ -28,6 +28,7 @@ func (lc *LibraryController) Run() {
 		fmt.Println("4. Return Book")
 		fmt.Println("5. List Available Books")
 		fmt.Println("6. List Borrowed Books by Member")
+		fmt.Println("7. Add Member")
 		fmt.Println("0. Exit")
 		fmt.Print("Enter your choice: ")
 
@@ -47,6 +48,8 @@ func (lc *LibraryController) Run() {
 			lc.listAvailableBooks()
 		case "6":
 			lc.listBorrowedBooks(scanner)
+		case "7":
+			lc.addMember(scanner)
 		case "0":
 			fmt.Println("Exiting...")
 			return
@@ -137,4 +140,24 @@ func (lc *LibraryController) listBorrowedBooks(scanner *bufio.Scanner) {
 	for _, book := range books {
 		fmt.Printf("ID: %d, Title: %s, Author: %s\n", book.ID, book.Title, book.Author)
 	}
+}
+
+func (lc *LibraryController) addMember(scanner *bufio.Scanner) {
+    fmt.Print("Enter Member ID: ")
+    scanner.Scan()
+    id, err := strconv.Atoi(scanner.Text())
+    if err != nil {
+        fmt.Println("Invalid Member ID.")
+        return
+    }
+
+    fmt.Print("Enter Member Name: ")
+    scanner.Scan()
+    name := scanner.Text()
+
+    member := models.Member{
+        ID:   id,
+        Name: name,
+    }
+    lc.service.AddMember(member)
 }
