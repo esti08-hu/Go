@@ -72,6 +72,12 @@ func updatedTask(ctx *gin.Context){
 			if updatedTask.Description != "" {
 				tasks[i].Description = updatedTask.Description
 			}
+			if updatedTask.Status != "" {
+				tasks[i].Status = updatedTask.Status
+			}
+			if !updatedTask.DueDate.IsZero() {
+				tasks[i].DueDate = updatedTask.DueDate
+			}
 			ctx.JSON(http.StatusOK, gin.H{"message": "Task updated successfully", "task": tasks[i]})
 			return
 		}
