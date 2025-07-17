@@ -1,62 +1,91 @@
 package data
 
 import (
+	"context"
+	"time"
+
 	"task_manager/models"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var tasks []models.Task
+var TaskCollection *mongo.Collection
 
 func Ping() string {
 	return "pong"
 }
 
 func GetTasks() []models.Task {
-	if tasks == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cursor, err := TaskCollection.Find(ctx, bson.D{})
+	if err != nil {
+		return []models.Task{}
+	}
+
+	var tasks []models.Task
+	if err = cursor.All(ctx, &tasks); err != nil {
 		return []models.Task{}
 	}
 	return tasks
 }
 
 func GetTaskById(id string) *models.Task {
-	for _, task := range tasks {
-		if task.ID == id {
-			return &task
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var task models.Task
+	err := TaskCollection.FindOne(ctx, bson.M{"id": id}).Decode(&task)
+	if err != nil {
+		return nil
 	}
-	return nil
+	return &task
 }
 
 func RemoveTask(id string) {
-	for i, task := range tasks {
-		if task.ID == id {
-			tasks = append(tasks[:i], tasks[i+1:]...)
-			return
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := TaskCollection.DeleteOne(ctx, bson.M{"id": id})
+	if err != nil {
+		return
 	}
 }
 
-func UpdatedTask(id string, updatedTask models.Task) (models.Task, error) {
-	for i, task := range tasks {
-		if task.ID == id {
-			if updatedTask.Title != "" {
-				tasks[i].Title = updatedTask.Title
-			}
-			if updatedTask.Description != "" {
-				tasks[i].Description = updatedTask.Description
-			}
-			if updatedTask.Status != "" {
-				tasks[i].Status = updatedTask.Status
-			}
-			if !updatedTask.DueDate.IsZero() {
-				tasks[i].DueDate = updatedTask.DueDate
-			}
-			return tasks[i], nil
-		}
+
+func UpdatedTask(id string, updateTask models.Task) (models.Task, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{"id": id}
+	update := bson.M{
+		"$set": bson.M{
+			"title":       updateTask.Title,
+			"description": updateTask.Description,
+			"status":      updateTask.Status,
+			"due_date":    updateTask.DueDate,
+		},
 	}
-	return models.Task{}, nil
+
+	var updatedTask models.Task
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	err := TaskCollection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updatedTask)
+	if err != nil {
+		return models.Task{}, err
+	}
+	return updatedTask, nil
 }
 
-func AddTask(newTask models.Task) models.Task {
-	tasks = append(tasks, newTask)
-	return newTask
+func AddTask(newTask models.Task) (models.Task, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := TaskCollection.InsertOne(ctx, newTask)
+	if err != nil {
+		return models.Task{}, err
+	}
+	return newTask, nil
 }

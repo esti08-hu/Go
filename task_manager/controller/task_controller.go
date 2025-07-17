@@ -72,7 +72,11 @@ func AddTask(ctx *gin.Context) {
 		return
 	}
 	// Add the new task
-	newTask = data.AddTask(newTask)
+	newTask, err := data.AddTask(newTask)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add task"})
+		return
+	}
 	fmt.Println("New Task:", newTask)
 	ctx.JSON(http.StatusCreated, gin.H{"message": "Task added successfully", "task": newTask})
 }
