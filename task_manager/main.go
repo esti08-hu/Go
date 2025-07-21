@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"task_manager/router"
 	"task_manager/data"
+	"task_manager/router"
 
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -33,6 +33,7 @@ func main() {
 		log.Fatal(err)
 	}
 	data.TaskCollection = client.Database("task_db").Collection("tasks")
+	data.UserCollection = client.Database("task_db").Collection("users")
 
 	r := router.SetupRouter()
 	r.Run(":8080")

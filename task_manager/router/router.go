@@ -1,20 +1,34 @@
 package router
 
 import (
-	"github.com/gin-gonic/gin"
 	"task_manager/controller"
+	"task_manager/middleware"
+
+	"github.com/gin-gonic/gin"
 )
 
 func SetupRouter() *gin.Engine {
 	router := gin.Default()
-	tasks:= router.Group("/tasks")
 
+	// Public routes (no authentication required)
+	router.POST("/register", controller.Register)
+	router.POST("/login", controller.Login)
+
+	// Admin-only routes
+	router.POST("/promote", middleware.AuthMiddleware(), middleware.AdminMiddleware(), controller.PromoteUser)
+
+	// Task routes with authentication
+	tasks := router.Group("/tasks")
 	{
-		tasks.GET("/", controller.GetAllTasks)
-		tasks.GET("/:id", controller.GetTask)
-		tasks.POST("/", controller.AddTask)
-		tasks.PUT("/:id", controller.UpdatedTask)
-		tasks.DELETE("/:id", controller.RemoveTask)
+		// Routes accessible to all authenticated users
+		tasks.GET("/", middleware.AuthMiddleware(), controller.GetAllTasks)
+		tasks.GET("/:id", middleware.AuthMiddleware(), controller.GetTask)
+
+		// Admin-only task routes
+		tasks.POST("/", middleware.AuthMiddleware(), middleware.AdminMiddleware(), controller.AddTask)
+		tasks.PUT("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(), controller.UpdatedTask)
+		tasks.DELETE("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(), controller.RemoveTask)
 	}
+
 	return router
 }
