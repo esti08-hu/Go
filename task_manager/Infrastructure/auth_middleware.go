@@ -1,11 +1,10 @@
-package middleware
+package infrastructure
 
 import (
 	"net/http"
 	"os"
 	"strings"
-
-	"task_manager/models"
+	domain "task_manager/Domain"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
@@ -75,7 +74,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// Create user object from claims
-		user := &models.User{
+		user := &domain.User{
 			ID:       claims.UserID,
 			Username: claims.Username,
 			Email:    claims.Email,
@@ -99,7 +98,7 @@ func AdminMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		user, ok := userInterface.(*models.User)
+		user, ok := userInterface.(*domain.User)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user type in context"})
 			c.Abort()
@@ -118,13 +117,13 @@ func AdminMiddleware() gin.HandlerFunc {
 }
 
 // GetUserFromContext extracts user information from the Gin context
-func GetUserFromContext(c *gin.Context) (*models.User, bool) {
+func GetUserFromContext(c *gin.Context) (*domain.User, bool) {
 	userInterface, exists := c.Get(UserContextKey)
 	if !exists {
 		return nil, false
 	}
 
-	user, ok := userInterface.(*models.User)
+	user, ok := userInterface.(*domain.User)
 	if !ok {
 		return nil, false
 	}

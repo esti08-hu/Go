@@ -2,26 +2,27 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"task_manager/data"
-	"task_manager/middleware"
-	"task_manager/models"
+	domain "task_manager/Domain"
+	infrastructure "task_manager/Infrastructure"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
+type Controller struct {
+	TaskUsecases domain.TaskUsecases
+	UserUsecases domain.UserUsecases
+}
 // Register handles user registration
-func Register(ctx *gin.Context) {
-	var user models.User
+func (cr *Controller) Register(ctx *gin.Context) {
+	var user domain.User
 	if err := ctx.ShouldBindJSON(&user); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload: " + err.Error()})
 		return
 	}
-
 	// Validate required fields
 	if user.Username == "" || user.Email == "" || user.Password == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Username, email, and password are required"})
@@ -29,8 +30,8 @@ func Register(ctx *gin.Context) {
 	}
 
 	// Check if user already exists by email
-	existingUser, err := data.GetUserByEmail(user.Email)
-	if err != nil {
+	existingUser, err := cr.UserUsecases.GetUserByEmail(ctx, user.Email)
+	if err != nil && err != mongo.ErrNoDocuments {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
@@ -41,8 +42,8 @@ func Register(ctx *gin.Context) {
 	}
 
 	// Check if user already exists by username
-	existingUser, err = data.GetUserByUsername(user.Username)
-	if err != nil {
+	existingUser, err = cr.UserUsecases.GetUserByUsername(ctx, user.Username)
+	if err != nil && err != mongo.ErrNoDocuments {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
@@ -50,15 +51,21 @@ func Register(ctx *gin.Context) {
 		ctx.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
 		return
 	}
+	// Hash the password
+	hashedPassword, err := infrastructure.HashPassword(user.Password)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+	user.Password = hashedPassword
 
 	// Create the user (role will be set automatically in CreateUser)
-	createdUser, err := data.CreateUser(&user)
+	createdUser, err := cr.UserUsecases.CreateUser(ctx, &user)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
 
-	// Don't return the password in the response
 	response := gin.H{
 		"message": "User registered successfully",
 		"user": gin.H{
@@ -70,10 +77,10 @@ func Register(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusCreated, response)
+	
 }
-
 // Login handles user authentication
-func Login(ctx *gin.Context) {
+func (cr *Controller) Login(ctx *gin.Context) {
 	var loginRequest struct {
 		Email    string `json:"email" binding:"required"`
 		Password string `json:"password" binding:"required"`
@@ -85,24 +92,24 @@ func Login(ctx *gin.Context) {
 	}
 
 	// Get user by email
-	user, err := data.GetUserByEmail(loginRequest.Email)
-	if err != nil {
+	user, err := cr.UserUsecases.GetUserByEmail(ctx, loginRequest.Email)
+	
+	if err != nil && err != mongo.ErrNoDocuments {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 	if user == nil {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email"})
 		return
 	}
-
 	// Verify password
-	if !data.VerifyPassword(user, loginRequest.Password) {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+	if !infrastructure.VerifyPassword(user, loginRequest.Password) {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
 		return
 	}
 
 	// Generate JWT token
-	token, err := data.GenerateToken(user)
+	token, err := infrastructure.GenerateToken(user)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
@@ -121,7 +128,7 @@ func Login(ctx *gin.Context) {
 }
 
 // PromoteUser allows admins to promote other users to admin role
-func PromoteUser(ctx *gin.Context) {
+func (cr *Controller) PromoteUser(ctx *gin.Context) {
 	var promoteRequest struct {
 		UserID string `json:"user_id" binding:"required"`
 	}
@@ -131,7 +138,7 @@ func PromoteUser(ctx *gin.Context) {
 		return
 	}
 	// Get the user to be promoted
-	user, err := data.GetUserById(promoteRequest.UserID)
+	user, err := cr.UserUsecases.GetUserByID(ctx, promoteRequest.UserID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
@@ -151,10 +158,7 @@ func PromoteUser(ctx *gin.Context) {
 	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	filter := bson.M{"id": promoteRequest.UserID}
-	update := bson.M{"$set": bson.M{"role": "admin"}}
-
-	_, err = data.UserCollection.UpdateOne(dbCtx, filter, update)
+	err = cr.UserUsecases.PromoteUserToAdmin(dbCtx, promoteRequest.UserID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to promote user"})
 		return
@@ -172,15 +176,20 @@ func PromoteUser(ctx *gin.Context) {
 }
 
 // Task Handlers (Updated with admin checks)
-func GetAllTasks(ctx *gin.Context) {
-	// Get user from context (set by AuthMiddleware)
-	user, exists := middleware.GetUserFromContext(ctx)
+func (cr *Controller) GetAllTasks(ctx *gin.Context) {
+	// Get user from context (set by AuthMiddlewarre)
+	user, exists := infrastructure.GetUserFromContext(ctx)
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
 
-	tasks := data.GetTasks()
+	tasks, err := cr.TaskUsecases.GetAllTasks(ctx, &domain.Task{})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve tasks"})
+		return
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
 		"tasks": tasks,
 		"user": gin.H{
@@ -191,16 +200,22 @@ func GetAllTasks(ctx *gin.Context) {
 	})
 }
 
-func GetTask(ctx *gin.Context) {
+func (cr *Controller) GetTask(ctx *gin.Context) {
 	// Get user from context (set by AuthMiddleware)
-	user, exists := middleware.GetUserFromContext(ctx)
+	user, exists := infrastructure.GetUserFromContext(ctx)
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
 
 	id := ctx.Param("id")
-	task := data.GetTaskById(id)
+	task, err := cr.TaskUsecases.GetTaskByID(ctx, id)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve task"})
+		return
+	}
+
 	if task == nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 		return
@@ -216,26 +231,32 @@ func GetTask(ctx *gin.Context) {
 	})
 }
 
-func RemoveTask(ctx *gin.Context) {
+func (cr *Controller) RemoveTask(ctx *gin.Context) {
 	// Get user from context (set by AuthMiddleware)
-	_, exists := middleware.GetUserFromContext(ctx)
+	_, exists := infrastructure.GetUserFromContext(ctx)
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
 
 	id := ctx.Param("id")
-	if task := data.GetTaskById(id); task != nil {
-		data.RemoveTask(id)
+	 task, err := cr.TaskUsecases.GetTaskByID(ctx, id); 
+	 if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve task"})
+		return
+	 }
+	 
+	 if task != nil {
+		cr.TaskUsecases.DeleteTask(ctx, id)
 		ctx.JSON(http.StatusOK, gin.H{"message": "Task removed successfully"})
 		return
 	}
 	ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 }
 
-func UpdatedTask(ctx *gin.Context) {
+func (cr *Controller) UpdatedTask(ctx *gin.Context) {
 	// Get user from context (set by AuthMiddleware)
-	user, exists := middleware.GetUserFromContext(ctx)
+	user, exists := infrastructure.GetUserFromContext(ctx)
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
@@ -248,15 +269,20 @@ func UpdatedTask(ctx *gin.Context) {
 	}
 
 	id := ctx.Param("id")
-	var updatedTask models.Task
+	var updatedTask *domain.Task
 
 	if err := ctx.ShouldBindJSON(&updatedTask); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if task := data.GetTaskById(id); task != nil {
-		updatedTask, err := data.UpdatedTask(id, updatedTask)
+	task, err := cr.TaskUsecases.GetTaskByID(ctx, id); 
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve task"})
+		return
+	}
+	if task != nil {
+		updatedTask, err := cr.TaskUsecases.UpdateTask(ctx, id, updatedTask)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
 			return
@@ -267,9 +293,9 @@ func UpdatedTask(ctx *gin.Context) {
 	ctx.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 }
 
-func AddTask(ctx *gin.Context) {
+func (cr *Controller) AddTask(ctx *gin.Context) {
 	// Get user from context (set by AuthMiddleware)
-	user, exists := middleware.GetUserFromContext(ctx)
+	user, exists := infrastructure.GetUserFromContext(ctx)
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
@@ -281,7 +307,7 @@ func AddTask(ctx *gin.Context) {
 		return
 	}
 
-	var newTask models.Task
+	var newTask *domain.Task
 	if err := ctx.ShouldBindJSON(&newTask); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -293,18 +319,24 @@ func AddTask(ctx *gin.Context) {
 	}
 
 	// Check if the task already exists
-	if existingTask := data.GetTaskById(newTask.ID); existingTask != nil {
+	existingTask, err := cr.TaskUsecases.GetTaskByID(ctx, newTask.ID); 
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing task"})
+		return
+	}
+
+	if existingTask != nil {
 		ctx.JSON(http.StatusConflict, gin.H{"error": "Task with this ID already exists"})
 		return
 	}
 
 	// Add the new task
-	createdTask, err := data.AddTask(newTask)
+	err = cr.TaskUsecases.CreateTask(ctx, newTask)
+
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add task"})
 		return
 	}
 
-	fmt.Println("New Task:", createdTask)
-	ctx.JSON(http.StatusCreated, gin.H{"message": "Task added successfully", "task": createdTask})
+	ctx.JSON(http.StatusCreated, gin.H{"message": "Task added successfully"})
 }
