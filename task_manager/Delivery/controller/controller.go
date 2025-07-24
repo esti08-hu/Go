@@ -74,7 +74,7 @@ func (cr *Controller) Register(ctx *gin.Context) {
 			"role":     createdUser.Role,
 		},
 	}
-
+	
 	ctx.JSON(http.StatusCreated, response)
 	
 }
@@ -117,12 +117,6 @@ func (cr *Controller) Login(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
 		"token":   token,
-		"user": gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"email":    user.Email,
-			"role":     user.Role,
-		},
 	})
 }
 
@@ -193,12 +187,6 @@ func (cr *Controller) GetAllTasks(ctx *gin.Context) {
 }
 
 func (cr *Controller) GetTask(ctx *gin.Context) {
-	// Get user from context (set by AuthMiddleware)
-	user, exists := infrastructure.GetUserFromContext(ctx)
-	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
 
 	id := ctx.Param("id")
 	task, err := cr.TaskUsecases.GetTaskByID(ctx, id)
@@ -215,11 +203,6 @@ func (cr *Controller) GetTask(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"task": task,
-		"user": gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"role":     user.Role,
-		},
 	})
 }
 

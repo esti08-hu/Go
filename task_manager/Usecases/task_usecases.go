@@ -7,6 +7,7 @@ import (
 	domain "task_manager/Domain"
 
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type taskUsecases struct {
@@ -25,7 +26,14 @@ func (tu *taskUsecases) GetAllTasks(ctx context.Context, id string) ([]*domain.T
 	ctx, cancel := context.WithTimeout(ctx, tu.contextTimeout)
 	defer cancel()
 
-	return tu.taskRepository.GetAllTasks(ctx, id)
+	tasks, err := tu.taskRepository.GetAllTasks(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(tasks) == 0 {
+		return nil, mongo.ErrNoDocuments
+	}
+	return tasks, nil
 }
 
 func (tu *taskUsecases) GetTaskByID(ctx context.Context, id string) (*domain.Task, error) {

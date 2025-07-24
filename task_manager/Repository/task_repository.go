@@ -41,9 +41,7 @@ func (tr *taskRepository) GetAllTasks(c context.Context, id string) ([]*domain.T
 	if err := cursor.Err(); err != nil {
 		return nil, err
 	}
-	if len(tasks) == 0 {
-		return nil, mongo.ErrNoDocuments
-	}
+	
 	return tasks, nil
 }
 
