@@ -5,6 +5,8 @@ import (
 	"time"
 
 	domain "task_manager/Domain"
+
+	"github.com/google/uuid"
 )
 
 type taskUsecases struct {
@@ -19,11 +21,11 @@ func NewTaskUsecases(taskRepository domain.TaskRepository, contextTimeout time.D
 	}
 }
 
-func (tu *taskUsecases) GetAllTasks(ctx context.Context, task *domain.Task) (*domain.Task, error) {
+func (tu *taskUsecases) GetAllTasks(ctx context.Context, id string) ([]*domain.Task, error) {
 	ctx, cancel := context.WithTimeout(ctx, tu.contextTimeout)
 	defer cancel()
 
-	return tu.taskRepository.GetAllTasks(ctx, task)
+	return tu.taskRepository.GetAllTasks(ctx, id)
 }
 
 func (tu *taskUsecases) GetTaskByID(ctx context.Context, id string) (*domain.Task, error) {
@@ -33,11 +35,14 @@ func (tu *taskUsecases) GetTaskByID(ctx context.Context, id string) (*domain.Tas
 	return tu.taskRepository.GetTaskByID(ctx, id)
 }
 
-func (tu *taskUsecases) CreateTask(ctx context.Context, task *domain.Task) error {
+func (tu *taskUsecases) CreateTask(ctx context.Context, newTask *domain.Task, user_id string) error {
 	ctx, cancel := context.WithTimeout(ctx, tu.contextTimeout)
 	defer cancel()
 
-	return tu.taskRepository.CreateTask(ctx, task)
+	newTask.ID = uuid.New().String()
+	newTask.UserID = user_id
+	
+	return tu.taskRepository.CreateTask(ctx, newTask)
 }
 
 func (tu *taskUsecases) UpdateTask(ctx context.Context, id string, task *domain.Task) (*domain.Task, error) {

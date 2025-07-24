@@ -13,6 +13,7 @@ const (
 // MODELS
 type Task struct {
 	ID          string    `json:"id"`
+	UserID      string    `json:"user_id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	DueDate     time.Time `json:"due_date"`
@@ -29,7 +30,7 @@ type User struct {
 
 // REPOSITORIES
 type TaskRepository interface {
-	GetAllTasks(c context.Context, task *Task) (*Task, error)
+	GetAllTasks(c context.Context, id string) ([]*Task, error)
 	GetTaskByID(c context.Context, id string) (*Task, error)
 	CreateTask(c context.Context, task *Task) error
 	UpdateTask(c context.Context, id string, task *Task) (*Task, error)
@@ -47,9 +48,9 @@ type UserRepository interface {
 
 // USECASES
 type TaskUsecases interface {
-	GetAllTasks(ctx context.Context, task *Task) (*Task, error)
+	GetAllTasks(ctx context.Context, id string) ([]*Task, error)
 	GetTaskByID(ctx context.Context, id string) (*Task, error)
-	CreateTask(ctx context.Context, task *Task) error
+	CreateTask(ctx context.Context, task *Task, userId string) error
 	UpdateTask(ctx context.Context, id string, task *Task) (*Task, error)
 	DeleteTask(ctx context.Context, id string) error
 }

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -175,16 +174,14 @@ func (cr *Controller) PromoteUser(ctx *gin.Context) {
 	})
 }
 
+
 // Task Handlers (Updated with admin checks)
 func (cr *Controller) GetAllTasks(ctx *gin.Context) {
 	// Get user from context (set by AuthMiddlewarre)
-	user, exists := infrastructure.GetUserFromContext(ctx)
-	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
+	user, _ := infrastructure.GetUserFromContext(ctx)
 
-	tasks, err := cr.TaskUsecases.GetAllTasks(ctx, &domain.Task{})
+	tasks, err := cr.TaskUsecases.GetAllTasks(ctx, user.ID)
+
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve tasks"})
 		return
@@ -192,11 +189,6 @@ func (cr *Controller) GetAllTasks(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"tasks": tasks,
-		"user": gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"role":     user.Role,
-		},
 	})
 }
 
@@ -295,17 +287,7 @@ func (cr *Controller) UpdatedTask(ctx *gin.Context) {
 
 func (cr *Controller) AddTask(ctx *gin.Context) {
 	// Get user from context (set by AuthMiddleware)
-	user, exists := infrastructure.GetUserFromContext(ctx)
-	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	// Check if user is admin
-	if user.Role != "admin" {
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "Admin access required to create tasks"})
-		return
-	}
+	user, _ := infrastructure.GetUserFromContext(ctx)
 
 	var newTask *domain.Task
 	if err := ctx.ShouldBindJSON(&newTask); err != nil {
@@ -313,25 +295,8 @@ func (cr *Controller) AddTask(ctx *gin.Context) {
 		return
 	}
 
-	// Generate ID if not provided
-	if newTask.ID == "" {
-		newTask.ID = uuid.New().String()
-	}
-
-	// Check if the task already exists
-	existingTask, err := cr.TaskUsecases.GetTaskByID(ctx, newTask.ID); 
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing task"})
-		return
-	}
-
-	if existingTask != nil {
-		ctx.JSON(http.StatusConflict, gin.H{"error": "Task with this ID already exists"})
-		return
-	}
-
 	// Add the new task
-	err = cr.TaskUsecases.CreateTask(ctx, newTask)
+	err := cr.TaskUsecases.CreateTask(ctx, newTask, user.ID)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add task"})
