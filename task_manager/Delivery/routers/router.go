@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRouter(engine *gin.Engine, ctrl controller.Controller)  {
+func SetupRouter(engine *gin.Engine, ctrl *controller.Controller)  {
 	public := engine.Group("")
 
 	// Public routes (no authentication required)

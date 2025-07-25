@@ -52,10 +52,7 @@ func main() {
 	taskUsecase := usecases.NewTaskUsecases(taskRepo, timeout)
 
 	// Initialize controllers
-	ctrl := controller.Controller{
-		UserUsecases: userUsecase,
-		TaskUsecases: taskUsecase,
-	}
+	ctrl := controller.NewController(taskUsecase, userUsecase)
 
 	// Setup router
 	engine := gin.Default()

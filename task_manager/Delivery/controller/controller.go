@@ -13,6 +13,14 @@ type Controller struct {
 	TaskUsecases domain.TaskUsecases
 	UserUsecases domain.UserUsecases
 }
+
+func NewController(tu domain.TaskUsecases, uu domain.UserUsecases) *Controller {
+	return &Controller{
+		TaskUsecases: tu,
+		UserUsecases: uu,
+	}
+}
+
 // Register handles user registration
 func (cr *Controller) Register(ctx *gin.Context) {
 	var user domain.User
