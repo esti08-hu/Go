@@ -115,18 +115,3 @@ func AdminMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
-
-// GetUserFromContext extracts user information from the Gin context
-func GetUserFromContext(c *gin.Context) (*domain.User, bool) {
-	userInterface, exists := c.Get(UserContextKey)
-	if !exists {
-		return nil, false
-	}
-
-	user, ok := userInterface.(*domain.User)
-	if !ok {
-		return nil, false
-	}
-
-	return user, true
-}

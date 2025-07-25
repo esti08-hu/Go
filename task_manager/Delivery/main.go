@@ -4,8 +4,10 @@ import (
 	"context"
 	"log"
 	"os"
+
 	"task_manager/Delivery/controller"
 	router "task_manager/Delivery/routers"
+	infrastructure "task_manager/Infrastructure"
 	repository "task_manager/Repository"
 	usecases "task_manager/Usecases"
 	"time"
@@ -39,10 +41,14 @@ func main() {
 	db := client.Database("task_db")
 	userRepo := repository.NewUserRepository(db, "users")
 	taskRepo := repository.NewTaskRepository(db, "tasks")
+	
+	// Initialize services
+	passwordService := infrastructure.NewPasswordService()
+	jwtService := infrastructure.NewJWTService()
 
 	// Initialize usecases
-	timeout := 10*time.Second
-	userUsecase := usecases.NewUserUsecases(userRepo, timeout)
+	timeout := 10 * time.Second
+	userUsecase := usecases.NewUserUsecases(userRepo, passwordService, jwtService, timeout)
 	taskUsecase := usecases.NewTaskUsecases(taskRepo, timeout)
 
 	// Initialize controllers

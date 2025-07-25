@@ -11,7 +11,14 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
-func GenerateToken(user *domain.User) (string, error) {
+type JWTService struct {
+}
+
+func NewJWTService() domain.IJWTService {
+	return &JWTService{}
+}
+
+func (js *JWTService) GenerateToken(user *domain.User) (string, error) {
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
 	}

@@ -4,11 +4,9 @@ import (
 	"context"
 	"net/http"
 	domain "task_manager/Domain"
-	infrastructure "task_manager/Infrastructure"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type Controller struct {
@@ -27,36 +25,6 @@ func (cr *Controller) Register(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Username, email, and password are required"})
 		return
 	}
-
-	// Check if user already exists by email
-	existingUser, err := cr.UserUsecases.GetUserByEmail(ctx, user.Email)
-	if err != nil && err != mongo.ErrNoDocuments {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-
-	if existingUser != nil {
-		ctx.JSON(http.StatusConflict, gin.H{"error": "User with this email already exists"})
-		return
-	}
-
-	// Check if user already exists by username
-	existingUser, err = cr.UserUsecases.GetUserByUsername(ctx, user.Username)
-	if err != nil && err != mongo.ErrNoDocuments {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-	if existingUser != nil {
-		ctx.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
-		return
-	}
-	// Hash the password
-	hashedPassword, err := infrastructure.HashPassword(user.Password)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
-		return
-	}
-	user.Password = hashedPassword
 
 	// Create the user (role will be set automatically in CreateUser)
 	createdUser, err := cr.UserUsecases.CreateUser(ctx, &user)
@@ -90,30 +58,8 @@ func (cr *Controller) Login(ctx *gin.Context) {
 		return
 	}
 
-	// Get user by email
-	user, err := cr.UserUsecases.GetUserByEmail(ctx, loginRequest.Email)
-	
-	if err != nil && err != mongo.ErrNoDocuments {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-	if user == nil {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email"})
-		return
-	}
-	// Verify password
-	if !infrastructure.VerifyPassword(user, loginRequest.Password) {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
-		return
-	}
+	token, _ := cr.UserUsecases.Login(ctx, loginRequest.Email, loginRequest.Password)
 
-	// Generate JWT token
-	token, err := infrastructure.GenerateToken(user)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-		return
-	}
-	
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
 		"token":   token,
@@ -141,12 +87,11 @@ func (cr *Controller) PromoteUser(ctx *gin.Context) {
 		return
 	}
 
-	// Check if user is already an admin
 	if user.Role == "admin" {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "User is already an admin"})
-		return
+		return	
 	}
-
+	
 	// Update user role to admin
 	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -168,11 +113,11 @@ func (cr *Controller) PromoteUser(ctx *gin.Context) {
 	})
 }
 
-
 // Task Handlers (Updated with admin checks)
 func (cr *Controller) GetAllTasks(ctx *gin.Context) {
 	// Get user from context (set by AuthMiddlewarre)
-	user, _ := infrastructure.GetUserFromContext(ctx)
+	// user, _ := infrastructure.GetUserFromContext(ctx)
+	user, _ := cr.UserUsecases.GetCurrentUser(ctx)
 
 	tasks, err := cr.TaskUsecases.GetAllTasks(ctx, user.ID)
 
@@ -208,8 +153,9 @@ func (cr *Controller) GetTask(ctx *gin.Context) {
 
 func (cr *Controller) RemoveTask(ctx *gin.Context) {
 	// Get user from context (set by AuthMiddleware)
-	_, exists := infrastructure.GetUserFromContext(ctx)
-	if !exists {
+	user, _ := cr.UserUsecases.GetCurrentUser(ctx)
+
+	if user == nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
@@ -230,18 +176,6 @@ func (cr *Controller) RemoveTask(ctx *gin.Context) {
 }
 
 func (cr *Controller) UpdatedTask(ctx *gin.Context) {
-	// Get user from context (set by AuthMiddleware)
-	user, exists := infrastructure.GetUserFromContext(ctx)
-	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	// Check if user is admin
-	if user.Role != "admin" {
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "Admin access required to update tasks"})
-		return
-	}
 
 	id := ctx.Param("id")
 	var updatedTask *domain.Task
@@ -270,7 +204,7 @@ func (cr *Controller) UpdatedTask(ctx *gin.Context) {
 
 func (cr *Controller) AddTask(ctx *gin.Context) {
 	// Get user from context (set by AuthMiddleware)
-	user, _ := infrastructure.GetUserFromContext(ctx)
+	user, _ := cr.UserUsecases.GetCurrentUser(ctx)
 
 	var newTask *domain.Task
 	if err := ctx.ShouldBindJSON(&newTask); err != nil {

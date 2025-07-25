@@ -20,11 +20,23 @@ func NewUserRepository(db *mongo.Database, collection string) domain.UserReposit
 	}
 }
 
-func (ur *userRepository) GetAllUsers(c context.Context, user *domain.User) error {
+func (ur *userRepository) GetAllUsers(c context.Context, user *domain.User) ([]*domain.User, error) {
 	collection := ur.database.Collection(ur.collection)
 
-	_, err := collection.Find(c, bson.D{})
-	return err
+	cursor, err := collection.Find(c, bson.D{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(c)
+	var users []*domain.User
+	for cursor.Next(c) {
+		var user domain.User
+		if err := cursor.Decode(&user); err != nil {
+			return nil, err
+		}
+		users = append(users, &user)
+	}
+	return users, nil
 }
 
 func (ur *userRepository) GetUserByID(c context.Context, id string) (*domain.User, error) {
@@ -48,6 +60,9 @@ func (ur *userRepository) GetUserByEmail(c context.Context, email string) (*doma
 	err := collection.FindOne(c, filter).Decode(&user)
 
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, domain.ErrUserNotFound // Translate mongodb to domain error
+		}
 		return nil, err
 	}
 	return &user, nil
@@ -60,6 +75,9 @@ func (ur *userRepository) GetUserByUsername(c context.Context, username string) 
 	err := collection.FindOne(c, filter).Decode(&user)
 
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, domain.ErrUserNotFound // Translate mongodb to domain error
+		}
 		return nil, err
 	}
 	return &user, nil
