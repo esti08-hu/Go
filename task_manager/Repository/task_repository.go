@@ -9,7 +9,7 @@ import (
 )
 
 type taskRepository struct {
-	database *mongo.Database
+	database   *mongo.Database
 	collection string
 }
 
@@ -24,7 +24,7 @@ func (tr *taskRepository) GetAllTasks(c context.Context, id string) ([]*domain.T
 	collection := tr.database.Collection(tr.collection)
 	filter := bson.M{"userid": id}
 	cursor, err := collection.Find(c, filter)
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func (tr *taskRepository) GetAllTasks(c context.Context, id string) ([]*domain.T
 	if err := cursor.Err(); err != nil {
 		return nil, err
 	}
-	
+
 	return tasks, nil
 }
 
